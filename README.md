@@ -8,8 +8,12 @@
 <h1 align="center">⚡ nim-check</h1>
 
 <p align="center">
-  <strong>Live terminal availability & latency checker for NVIDIA NIM LLM models</strong><br>
-  <sub>Ping 44 frontier models in parallel — watch results animate in real-time</sub>
+  <strong>Find the fastest NVIDIA NIM models in seconds</strong><br>
+  <sub>Ping 44 free LLM models in parallel — pick the best one for OpenCode, Cursor, or any AI tool</sub>
+</p>
+
+<p align="center">
+  <img src="demo.gif" alt="nim-check demo" width="100%">
 </p>
 
 <p align="center">
@@ -23,6 +27,8 @@
 ---
 
 ## ✨ Features
+
+> **Why nim-check?** NVIDIA offers 40+ free LLM models via NIM API — but which ones are actually available right now? Which one is fastest? Run `nim-check` and find out in seconds. Then plug the fastest model into OpenCode, Cursor, or any AI coding assistant and code for free.
 
 - **🚀 Parallel pings** — All 44 models tested simultaneously via native `fetch`
 - **📊 Real-time animation** — Watch latency appear live in alternate screen buffer
