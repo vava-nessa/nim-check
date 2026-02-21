@@ -173,7 +173,7 @@ const spinCell = (f, o = 0) => chalk.dim.yellow(FRAMES[(f + o) % FRAMES.length].
 
 // ─── Table renderer ───────────────────────────────────────────────────────────
 
-function renderTable(results, pendingPings, frame) {
+function renderTable(results, pendingPings, frame, tierFilter = null) {
   const up      = results.filter(r => r.status === 'up').length
   const down    = results.filter(r => r.status === 'down').length
   const timeout = results.filter(r => r.status === 'timeout').length
@@ -201,9 +201,11 @@ function renderTable(results, pendingPings, frame) {
   // 📖 col() — right-aligns text in a fixed-width column, no borders, just spaces
   const col = (txt, w) => txt.padStart(w)
 
+  const tierLabel = tierFilter ? chalk.dim(`  [tier: ${tierFilter.join(', ')}]`) : ''
+
   const lines = [
     '',
-    `  ${chalk.bold('⚡ NIM Coding Models')}   ` +
+    `  ${chalk.bold('⚡ NIM Coding Models')}${tierLabel}   ` +
       chalk.greenBright(`✅ ${up}`) + chalk.dim(' up  ') +
       chalk.yellow(`⏱ ${timeout}`) + chalk.dim(' t/o  ') +
       chalk.red(`❌ ${down}`) + chalk.dim(' down  ') +
@@ -322,8 +324,28 @@ async function ping(apiKey, modelId) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  // 📖 Priority: CLI arg > env var > saved config > wizard
-  let apiKey = process.argv[2] || process.env.NVIDIA_API_KEY || loadApiKey()
+  // 📖 Parse --tier flag before resolving the API key
+  const args = process.argv.slice(2)
+  const tierIdx = args.indexOf('--tier')
+  let tierFilter = null
+  if (tierIdx !== -1) {
+    const val = args[tierIdx + 1]
+    if (!val || val.startsWith('--')) {
+      console.error(chalk.red('  ✖ --tier requires a value, e.g. --tier S or --tier S,A'))
+      process.exit(1)
+    }
+    tierFilter = val.toUpperCase().split(',').map(t => t.trim())
+    const validTiers = new Set(['S', 'A', 'B', 'C'])
+    const invalid = tierFilter.filter(t => !validTiers.has(t))
+    if (invalid.length) {
+      console.error(chalk.red(`  ✖ Unknown tier(s): ${invalid.join(', ')}. Valid tiers: S, A, B, C`))
+      process.exit(1)
+    }
+    args.splice(tierIdx, 2)
+  }
+
+  // 📖 Priority: CLI arg (first non-flag) > env var > saved config > wizard
+  let apiKey = args.find(a => !a.startsWith('--')) || process.env.NVIDIA_API_KEY || loadApiKey()
 
   if (!apiKey) {
     apiKey = await promptApiKey()
@@ -336,7 +358,13 @@ async function main() {
     }
   }
 
-  const results = MODELS.map(([modelId, label, tier], i) => ({
+  const activeModels = tierFilter ? MODELS.filter(([,, tier]) => tierFilter.includes(tier)) : MODELS
+  if (activeModels.length === 0) {
+    console.error(chalk.red(`  ✖ No models found for tier(s): ${tierFilter.join(', ')}`))
+    process.exit(1)
+  }
+
+  const results = activeModels.map(([modelId, label, tier], i) => ({
     idx: i + 1, modelId, label, tier,
     status: 'pending',
     ping1: null, ping2: null, ping3: null, ping4: null,
@@ -360,10 +388,10 @@ async function main() {
   // 📖 Animation loop: clear alt screen + redraw table at FPS
   const ticker = setInterval(() => {
     state.frame++
-    process.stdout.write(ALT_CLEAR + renderTable(state.results, state.pendingPings, state.frame))
+    process.stdout.write(ALT_CLEAR + renderTable(state.results, state.pendingPings, state.frame, tierFilter))
   }, Math.round(1000 / FPS))
 
-  process.stdout.write(ALT_CLEAR + renderTable(state.results, state.pendingPings, state.frame))
+  process.stdout.write(ALT_CLEAR + renderTable(state.results, state.pendingPings, state.frame, tierFilter))
 
   // ── Ping all models — retry up to MAX_ATTEMPTS times for timeouts ────────────
   await Promise.all(results.map(async (r) => {
@@ -403,7 +431,7 @@ async function main() {
   // 📖 Leave alt screen — user is back in normal terminal
   // 📖 Print final table exactly once into normal stdout (stays in scrollback)
   process.stdout.write(ALT_LEAVE)
-  process.stdout.write(renderTable(state.results, 0, state.frame) + '\n')
+  process.stdout.write(renderTable(state.results, 0, state.frame, tierFilter) + '\n')
 }
 
 main().catch((err) => {
